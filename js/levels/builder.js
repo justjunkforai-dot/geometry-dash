@@ -160,7 +160,11 @@ export class LevelBuilder {
   gate(key, x, yc = 1.5, floor = 0, ceil = 10, blockKey = 'block') {
     // The opening is exactly the portal's 3 blocks, so nothing can slip past its sensor.
     yc = Math.max(floor + 1.5, Math.min(ceil - 1.5, Math.floor(yc) + 0.5));
-    this.portal(key, x, yc);
+    // A flying band exactly as tall as the gated span is pinned to it, so the corridor always
+    // matches the tunnel that follows.
+    const d = getDef(T(key));
+    const band = d.action === 'mode' && MODES[d.value].corridor;
+    this.portal(key, x, yc, band === ceil - floor ? { props: { floor } } : undefined);
     const cx = x - 0.5;
     const lo = Math.floor(yc - 1.5);
     const hi = Math.ceil(yc + 1.5);

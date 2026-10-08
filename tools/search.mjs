@@ -85,26 +85,43 @@ export function search(opts) {
   return { ok: false, best, bestX, bestTick };
 }
 
+/**
+ * Keeps `width` states. Coins first (when required); then slots are shared round-robin between
+ * behaviour buckets (held / grounded / mode / gravity) so no family of states (e.g. "on the
+ * ground, button released") is crowded out; inside a bucket states are spread over y/vy.
+ */
 function trim(next, width, coins) {
-  const count = (st) => (coins ? st.snap.coins.filter(Boolean).length : 0);
-  const groups = new Map();
-  for (const st of next) {
-    const c = count(st);
-    if (!groups.has(c)) groups.set(c, []);
-    groups.get(c).push(st);
+  const coinCount = (st) => (coins ? st.snap.coins.filter(Boolean).length : 0);
+  const maxCoins = Math.max(...next.map(coinCount));
+  const pool = coins ? next.filter((st) => coinCount(st) === maxCoins) : next;
+  const rest = coins ? next.filter((st) => coinCount(st) !== maxCoins) : [];
+  const buckets = new Map();
+  for (const st of pool) {
+    const p = st.snap.players[0];
+    const k = `${st.held ? 1 : 0}${p.onGround ? 1 : 0}${p.mode}${p.grav}${p.mini ? 1 : 0}`;
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(st);
   }
+  const lists = [...buckets.values()].map((g) => g.sort((a, b) => {
+    const pa = a.snap.players[0], pb = b.snap.players[0];
+    return pa.y - pb.y || pa.vy - pb.vy;
+  }));
+  // Evenly spaced picks from each bucket, interleaved until the width is reached.
   const kept = [];
-  for (const c of [...groups.keys()].sort((a, b) => b - a)) {
-    const g = groups.get(c);
-    g.sort((a, b) => {
-      const pa = a.snap.players[0], pb = b.snap.players[0];
-      return pa.y - pb.y || pa.vy - pb.vy;
-    });
-    const room = width - kept.length;
-    if (room <= 0) break;
-    if (g.length <= room) kept.push(...g);
-    else for (let j = 0; j < room; j++) kept.push(g[Math.floor((j * g.length) / room)]);
+  const quota = lists.map(() => 0);
+  let remaining = Math.min(width, pool.length);
+  while (remaining > 0) {
+    let progressed = false;
+    for (let i = 0; i < lists.length && remaining > 0; i++) {
+      if (quota[i] < lists[i].length) { quota[i]++; remaining--; progressed = true; }
+    }
+    if (!progressed) break;
   }
+  lists.forEach((g, i) => {
+    const q = quota[i];
+    for (let j = 0; j < q; j++) kept.push(g[Math.floor((j * g.length) / q)]);
+  });
+  for (let i = 0; kept.length < width && i < rest.length; i++) kept.push(rest[i]);
   return kept;
 }
 

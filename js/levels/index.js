@@ -8,6 +8,9 @@ import level3 from './level3.js';
 import level4 from './level4.js';
 import level5 from './level5.js';
 import level6 from './level6.js';
+import level7 from './level7.js';
+import level8 from './level8.js';
+import level9 from './level9.js';
 
 export const LEVELS = [
   { id: level1.meta.id, data: level1 },
@@ -16,4 +19,7 @@ export const LEVELS = [
   { id: level4.meta.id, data: level4 },
   { id: level5.meta.id, data: level5 },
   { id: level6.meta.id, data: level6 },
+  { id: level7.meta.id, data: level7 },
+  { id: level8.meta.id, data: level8 },
+  { id: level9.meta.id, data: level9, hidden: true },
 ];

@@ -59,7 +59,7 @@ b.portal('dualOff', X(39) + 1, 8.5);
 
 // C (40-55): spider.
 colors(b, 40, { bg: '#2a0636', obj: '#c77dff', line: '#ff8cf0' });
-b.portal('portalSpider', X(40) + 1, 1.5);
+b.gate('portalSpider', X(40) + 1, 1.5, 0, 10);
 b.text(X(39.6), 5.5, 'Spider: tap to teleport', { props: { size: 24 } });
 flipHazards(b, [42, 43, 44, 46, 47, 48, 50, 51, 52], 0, 8, { lead: 1.4, len: 3 });
 // Coin 2 sits on the ceiling between two floor runs: an extra double-teleport grabs it.
@@ -105,7 +105,7 @@ b.portal('dualOff', X(102) + 1, 8.5);
 
 // G (104-119): spider at 1.3×.
 colors(b, 104, { bg: '#2a0636', obj: '#c77dff', line: '#ffffff' });
-b.portal('portalSpider', X(104) + 1, 1.5);
+b.gate('portalSpider', X(104) + 1, 1.5, 0, 10);
 b.speed(104, 2, 0, 8);
 pulses(b, 104, 120, 1, 'obj');
 flipHazards(b, [106, 107, 108, 109, 110, 112, 113, 114, 115, 116], 0, 8, { lead: 1.6, len: 4 });

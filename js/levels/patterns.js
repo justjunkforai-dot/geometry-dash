@@ -162,3 +162,77 @@ export function pulses(b, beat0, beat1, every = 1, channel = 'obj', color = '#ff
 export function cubeHeightAt(t) { return MODES.cube.jump * t - 0.5 * G * t * t; }
 
 export { BLOCK };
+
+// ---- section helpers shared by the harder levels ------------------------------------------
+
+/**
+ * Wave zig-zag between two beats: gate in, 45° slope corridor, gate out (`exitKey`).
+ * Returns { x0, end, prof } so callers can place coins relative to the corridor.
+ */
+export function waveRun(b, beat0, beat1, gap, amp, base, exitKey = 'portalCube', entryKey = 'portalWave') {
+  const gx = Math.round(b.x(beat0)) + 1;
+  b.gate(entryKey, gx, base + 1.5);
+  const x0 = gx + 2;
+  const cols = Math.round(b.x(beat1)) - x0;
+  const prof = zigzag(base, amp);
+  b.block(gx + 0.5, 0, 1, base);
+  b.block(gx + 0.5, base + gap, 1, 10 - base - gap);
+  waveCorridor(b, x0, cols, prof, gap);
+  const end = x0 + cols;
+  b.gate(exitKey, end + 0.5, prof(cols) + gap / 2);
+  return { x0, end, prof };
+}
+
+/** Two mirrored bands for dual flying: the lower follows `centre`, the upper mirrors it. */
+export function mirroredTunnel(b, x0, x1, centre, gap, ceil = 10) {
+  for (let cx = Math.floor(x0); cx < x1; cx++) {
+    const lo = Math.max(0, Math.round(centre(cx) - gap / 2));
+    const hi = lo + gap;
+    if (lo > 0) { b.block(cx, 0, 1, lo); b.block(cx, ceil - lo, 1, lo); }
+    if (hi < ceil - hi) b.block(cx, hi, 1, ceil - 2 * hi);
+  }
+}
+
+/** Ground spikes plus the same spikes mirrored on a ceiling at height `ceil` (dual mode). */
+export function dualSpikes(b, beat, n, ceil = 10) {
+  b.spikesAt(beat, n);
+  b.spikes(b.apex(beat) - n / 2, ceil - 1, n, { rot: 180 });
+}
+
+/** Spikes hanging from a ceiling whose underside is at `top`, under a flipped jump's apex. */
+export function hang(b, beat, n, top) {
+  b.spikes(b.apex(beat) - n / 2, top - 1, n, { rot: 180 });
+}
+
+/**
+ * Saw oscillating by (dx, dy) blocks every `beats` beats, at phase `atPhase` (0 = base
+ * position, 0.5 = fully offset) exactly on `beat`. Motion is a pure function of level time.
+ */
+export function movingSaw(b, x, y, size, dx, dy, beats, beat, atPhase = 0.5) {
+  const period = (beats * 60) / b.bpm;
+  const phase = (((atPhase - b.time(beat) / period) % 1) + 1) % 1;
+  b.saw(x, y, size, { props: { path: { dx, dy, period, phase } } });
+}
+
+let nextGroup = 100;
+/** A press block hanging `rise` up that slams down on `trigBeat` and becomes a step. */
+export function crusher(b, x, w, h, rise, trigBeat) {
+  const g = nextGroup++;
+  const beatSec = 60 / b.bpm;
+  b.inGroup(g, () => b.block(x, rise, w, h, 'panel'));
+  for (let k = 0; k < w; k++) b.deco('chain', x + k + 0.5, rise + h + 0.5);
+  b.trigger('trMove', b.x(trigBeat), { group: g, dx: 0, dy: -rise, duration: beatSec * 0.5, easing: 'in' });
+  b.trigger('trShake', b.x(trigBeat + 0.5), { strength: 5, duration: 0.2 });
+}
+
+/** A wall that lifts out of the way 1.5 beats before the player reaches it (spectacle). */
+export function gateWall(b, x, h, beat) {
+  const g = nextGroup++;
+  b.inGroup(g, () => b.block(x, 0, 1, h, 'brick'));
+  b.trigger('trMove', b.x(beat - 1.5), { group: g, dx: 0, dy: h + 1, duration: 60 / b.bpm, easing: 'inOut' });
+}
+
+/** Stack of identical portals covering a band so a flying player cannot miss it. */
+export function portalColumn(b, key, x, floor = 0, ceil = 9) {
+  for (let y = floor + 1.5; y < ceil; y += 3) b.portal(key, x, y);
+}

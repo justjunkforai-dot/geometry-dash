@@ -84,7 +84,9 @@ function fairness(rec) {
         if (sim.dead) return false;
         if (sim.completed) return true;
       }
-      return search({ level, sim, start: sim.snapshot(), startHeld: true, horizon: 300, width: 32, step: 6 }).ok;
+      // A narrow beam is usually enough; retry wider before calling the state unrecoverable.
+      const start = sim.snapshot();
+      return [32, 128].some((width) => search({ level, sim, start, startHeld: true, horizon: 300, width, step: 6 }).ok);
     };
     // Binary-search each edge of the (assumed contiguous) window, up to ±60 ticks.
     const edge = (dir) => {

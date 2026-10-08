@@ -80,6 +80,10 @@ export class Sim {
 
   /** Starts mid-level: fires earlier triggers instantly and applies a scanned portal state. */
   applyStart(st) {
+    if (st.tick) {
+      this.tick = st.tick;
+      this.time = st.tick * DT;
+    }
     const trig = this.world.triggers;
     while (this.trigIdx < trig.length && trig[this.trigIdx].x <= st.x) fireTrigger(this, trig[this.trigIdx++]);
     finishTweens(this);
@@ -91,14 +95,17 @@ export class Sim {
     setMini(p, !!st.mini);
     setMode(this, p, st.mode);
     this.corridor = st.corridor ? { ...st.corridor } : null;
-    p.y = p.py = st.y !== undefined ? st.y : (this.corridor ? (p.grav > 0 ? this.corridor.floor + p.h / 2 : this.corridor.ceil - p.h / 2) : p.h / 2);
+    p.y = p.py = st.y !== undefined ? st.y : (this.corridor ? (p.grav > 0 ? this.corridor.floor + p.h / 2 : this.corridor.ceil - p.h / 2) : (p.grav > 0 ? p.h / 2 : 6 * BLOCK));
     if (st.dual) this.enableDual(p.y);
+    if (this.world.pathObjects.length) this.world.updatePaths(this.time);
   }
 
-  corridorFor(mode, centerY) {
+  /** Flying band for `mode`: centred on the portal and snapped to the grid, unless the portal
+   *  pins its floor explicitly (props.floor, in blocks). */
+  corridorFor(mode, centerY, pinnedFloor) {
     const h = corridorHeight(mode) || (this.dual ? DUAL_HEIGHT : 0);
     if (!h) return null;
-    const floor = Math.max(0, Math.round((centerY - h / 2) / BLOCK) * BLOCK);
+    const floor = Number.isFinite(pinnedFloor) ? Math.max(0, pinnedFloor * BLOCK) : Math.max(0, Math.round((centerY - h / 2) / BLOCK) * BLOCK);
     return { floor, ceil: floor + h };
   }
 
@@ -109,7 +116,7 @@ export class Sim {
         if (p.mode === v && this.players.every((q) => q.mode === v)) return;
         this.emit('mode-left', o.x, o.y, this.players[0].mode, this.players[0].grazed);
         for (const q of this.players) setMode(this, q, v);
-        const c = this.corridorFor(v, o.y);
+        const c = this.corridorFor(v, o.y, o.props ? o.props.floor : undefined);
         if (c || !this.dual) this.corridor = c;
         this.emit('portal', o.x, o.y, 'mode', v);
         break;
