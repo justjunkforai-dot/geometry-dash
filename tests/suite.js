@@ -209,6 +209,27 @@ export async function runSuite(ctx) {
     });
   }
 
+  await test('bot runs take every mode, size and speed portal (no portal can be skipped)', () => {
+    for (const L of LEVELS) {
+      const rec = recs[L.id];
+      if (!rec) continue;
+      const portals = new Sim(L.data).world.objects.filter((o) => o.kind === 'portal' && ['mode', 'size', 'speed'].includes(o.def.action)).sort((a, b) => a.x - b.x);
+      let i = 0;
+      replay(L.data, rec, {
+        onTick: (sim) => {
+          const p = sim.players[0];
+          while (i < portals.length && p.x - p.w / 2 > portals[i].maxX + 1) {
+            const o = portals[i++];
+            // Speed columns share an x; only the first needs checking.
+            const d = o.def;
+            const ok = d.action === 'mode' ? p.mode === d.value : d.action === 'size' ? p.mini === d.value : sim.speedIdx === d.value;
+            assert(ok, `${L.id}: ${d.key} at x=${(o.x / BLOCK).toFixed(1)} was skipped`);
+          }
+        },
+      });
+    }
+  });
+
   await test('level data survives a JSON round trip', () => {
     const rec = recs[first.id];
     const copy = JSON.parse(JSON.stringify(first.data));

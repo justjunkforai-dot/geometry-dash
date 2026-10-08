@@ -124,7 +124,7 @@ export class Sim {
         break;
       case 'size':
         if (p.mini !== v) {
-          for (const q of this.players) setMini(q, v);
+          for (const q of this.players) setMini(q, v, this);
           this.emit('portal', o.x, o.y, 'size', v);
         }
         break;

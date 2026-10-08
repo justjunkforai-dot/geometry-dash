@@ -252,11 +252,11 @@ app.hooks = {
     g.rewards = g.opts.bot ? null : app.progress.onComplete(g.opts.levelId, g.meta, d.practice, d, d.coins);
     if (!g.opts.bot) app.achievements.onComplete(g, d);
   },
-  jump: () => app.achievements.onJump(),
+  jump: (g) => { if (!g.opts.bot) app.achievements.onJump(); },
   practice: (g) => { if (app.stateName === 'play' && g.state !== 'paused') ui.showHud(playHud(app, g)); },
-  mirror: () => app.achievements.unlock('mirror'),
-  dual: () => app.achievements.unlock('dual'),
-  modeLeft: (g, d) => app.achievements.onModeLeft(d),
+  mirror: (g) => { if (!g.opts.bot) app.achievements.unlock('mirror'); },
+  dual: (g) => { if (!g.opts.bot) app.achievements.unlock('dual'); },
+  modeLeft: (g, d) => { if (!g.opts.bot) app.achievements.onModeLeft(d); },
 };
 
 // ---- global input ------------------------------------------------------------------------------

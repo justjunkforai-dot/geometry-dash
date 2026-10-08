@@ -132,7 +132,7 @@ export const TRACKS = {
   },
 
   waveRunner: {
-    name: 'Wave Runner', bpm: 150, root: 49, scale: 'minor', prog: [0, 6, 5, 6],
+    name: 'Wave Runner', bpm: 156, root: 49, scale: 'minor', prog: [0, 6, 5, 6],
     inst: { bass: { type: 'sawtooth', cutoff: 600, q: 3, sub: 0.7 }, lead: { type: 'sawtooth', cutoff: 3600, detune: 14, delay: 0.3 }, arp: { type: 'square', cutoff: 3000, delay: 0.2, decay: 0.12 }, pad: { cutoff: 1800 } },
     drums: {
       intro: { h: 'xxxxxxxxxxxxxxxx' },

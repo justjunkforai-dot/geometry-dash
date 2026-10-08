@@ -32,6 +32,15 @@ export class LevelBuilder {
     this.offset = meta.offset || 0;
     this.segs = [{ t: 0, x: START_X, s: meta.startSpeed === undefined ? 1 : meta.startSpeed }];
     this.group = 0;
+    /** Set while authoring mini-cube sections so jump maths use the mini jump. */
+    this.mini = false;
+  }
+
+  /** Flat-ground cube airtime (s) for the current size. */
+  airtime() {
+    const j = this.mini ? CUBE.mini.jump : CUBE.jump;
+    const g = this.mini ? CUBE.mini.gravity : CUBE.gravity;
+    return (2 * j) / g;
   }
 
   // ---- beat mapping ------------------------------------------------------------------------
@@ -58,11 +67,13 @@ export class LevelBuilder {
   perBeat(beat) { return (this.v(beat) * 60) / this.bpm; }
 
   /** x (blocks) of the apex of a flat-ground cube jump pressed on `beat`. */
-  apex(beat) { return this.x(beat) + (this.v(beat) * CUBE_AIRTIME) / 2; }
+  apex(beat) { return this.x(beat) + (this.v(beat) * this.airtime()) / 2; }
 
   /** x (blocks) where a cube jump pressed on `beat` comes back down to height `h` blocks. */
   landX(beat, h = 0) {
-    const g = CUBE.gravity, v0 = CUBE.jump, y = h * BLOCK;
+    const g = this.mini ? CUBE.mini.gravity : CUBE.gravity;
+    const v0 = this.mini ? CUBE.mini.jump : CUBE.jump;
+    const y = h * BLOCK;
     const t = (v0 + Math.sqrt(Math.max(0, v0 * v0 - 2 * g * y))) / g;
     return this.x(beat) + this.v(beat) * t;
   }
@@ -147,6 +158,8 @@ export class LevelBuilder {
    * the band floor/ceiling (in blocks). `yc` is the portal centre height.
    */
   gate(key, x, yc = 1.5, floor = 0, ceil = 10, blockKey = 'block') {
+    // The opening is exactly the portal's 3 blocks, so nothing can slip past its sensor.
+    yc = Math.max(floor + 1.5, Math.min(ceil - 1.5, Math.floor(yc) + 0.5));
     this.portal(key, x, yc);
     const cx = x - 0.5;
     const lo = Math.floor(yc - 1.5);
@@ -173,10 +186,11 @@ export class LevelBuilder {
    * Speed portal placed so the player enters it exactly on `beat`; later beats map with the new
    * speed. Returns the portal x.
    */
-  speed(beat, idx, y = 1) {
+  speed(beat, idx, floor = 0, ceil = 6) {
     const t = this.time(beat);
     const x = this.x(beat);
-    this.put(`speed${idx}`, x + PORTAL_LEAD, y);
+    // A column of portals covering the reachable band, so the change can never be skipped.
+    for (let yy = floor + 1; yy < ceil; yy += 2) this.put(`speed${idx}`, x + PORTAL_LEAD, yy);
     this.segs.push({ t, x: x * BLOCK, s: idx });
     this.segs.sort((a, b) => a.t - b.t);
     return x + PORTAL_LEAD;

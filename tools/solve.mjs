@@ -1,154 +1,128 @@
 #!/usr/bin/env node
 /**
- * Level solver / validator. Breadth-first search over "hold or release" decisions every few
- * ticks, de-duplicating equivalent states, until the end wall is reached. Writes the resulting
- * input recording to tests/recordings/<id>.json and reports how tight each input is.
+ * Level solver / validator. Finds an input recording that completes a level and writes it to
+ * tests/recordings/<id>.json (or <id>.coins.json with --coins).
  *
- *   node tools/solve.mjs level1 [--coins] [--width 96] [--step 6] [--no-write]
+ *   node tools/solve.mjs level1 [--coins | --coin N] [--width 96] [--step 6] [--grid 2] [--tol 8]
+ *                                [--fair] [--no-write] [--raw]
  *
- * --coins  requires every secret coin to be collected (proves coins are reachable).
- * The search prefers releasing over holding, so recordings use as few presses as possible.
+ * --grid N  press-based modes may only start presses within ±tol ticks of 1/N beat
+ *           (proves the obstacles sit on the music's rhythm grid; 0 disables)
+ * --fair    reports each timed press's *recoverable window*: how far it can be early/late
+ *           and still survive the next 1.5 s with some later input.
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Sim } from '../js/sim.js';
-import { heldToPresses, replay } from '../tests/bot.js';
+import { replay } from '../tests/bot.js';
+import { search, makeGrid, HOLD_MODES } from './search.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
-const name = args.find((a) => !a.startsWith('--'));
+const name = args.find((a) => !a.startsWith('--') && !/^\d+$/.test(a));
 const flag = (f) => args.includes(f);
 const opt = (f, d) => { const i = args.indexOf(f); return i >= 0 ? Number(args[i + 1]) : d; };
-if (!name) { console.error('usage: solve.mjs <levelModule> [--coins] [--width N] [--step N]'); process.exit(1); }
+if (!name) { console.error('usage: solve.mjs <levelModule> [--coins] [--fair] …'); process.exit(1); }
 
 const level = (await import(name.includes('/') ? join(root, name) : join(root, 'js/levels', `${name}.js`))).default;
 const STEP = opt('--step', 6);
 const WIDTH = opt('--width', 96);
-const needCoins = flag('--coins');
+const onlyCoin = args.includes('--coin') ? opt('--coin', 0) : -1;
+const needCoins = flag('--coins') || onlyCoin >= 0;
+const coinsOk = (sim) => (onlyCoin >= 0 ? sim.coins[onlyCoin] : sim.coins.every(Boolean));
+const pressAllowed = makeGrid(level, opt('--grid', 2), opt('--tol', 8));
+const beatOf = (tick) => (((tick / 240) + (level.meta.offset || 0)) * level.meta.bpm) / 60;
+const ms = (n) => ((n * 1000) / 240).toFixed(0);
 
-function keyOf(sim, held) {
-  let k = `${held ? 1 : 0}|${sim.speedIdx}|${sim.dual ? 1 : 0}|${Math.round(sim.players[0].x)}`;
-  for (const p of sim.players) {
-    k += `|${Math.round(p.y * 4)},${Math.round(p.vy / 4)},${p.grav},${p.mode},${p.mini ? 1 : 0},${p.onGround ? 1 : 0},${p.dashing ? 1 : 0},${p.boost > 0 ? 1 : 0},${p.buffer > 0 ? 1 : 0},${p.usedOrbs.length}`;
+/** Drops every press the run does not need (keeps coin collection when required). */
+function minimize(rec) {
+  let ps = rec.presses.slice();
+  const ok = (list) => {
+    const r = replay(level, { presses: list });
+    return r.completed && (!needCoins || coinsOk(r.sim));
+  };
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = ps.length - 1; i >= 0; i--) {
+      const trial = ps.slice(0, i).concat(ps.slice(i + 1));
+      if (ok(trial)) { ps = trial; changed = true; }
+    }
   }
-  if (needCoins) k += `|${sim.coins.map((c) => (c ? 1 : 0)).join('')}`;
-  return k;
+  return { ...rec, presses: ps };
 }
 
-function solve() {
+/**
+ * Recoverable window of each timed press: shift it by δ ticks (others before it unchanged),
+ * then search for any input that survives the next 1.5 s.
+ */
+function fairness(rec) {
+  const ps = rec.presses;
   const sim = new Sim(level);
-  let layer = [{ snap: sim.snapshot(), held: false, parent: -1 }];
-  const history = [];
-  const inp = { held: false, pressed: false };
-  let best = 0;
-  let bestX = 0;
-  let bestTick = 0;
-  for (let d = 0; d < 100000; d++) {
-    const next = [];
-    const seen = new Set();
-    for (let i = 0; i < layer.length; i++) {
-      const st = layer[i];
-      for (const held of [false, true]) {
-        sim.restore(st.snap);
-        let done = false;
-        for (let k = 0; k < STEP; k++) {
-          inp.held = held;
-          inp.pressed = held && !st.held && k === 0;
-          sim.step(inp);
-          sim.events.length = 0;
-          if (sim.dead || sim.completed) break;
-        }
-        if (sim.dead) continue;
-        if (sim.progress > best) { best = sim.progress; bestX = sim.players[0].x / 30; bestTick = sim.tick; }
-        if (sim.completed) {
-          if (needCoins && !sim.coins.every(Boolean)) continue;
-          done = true;
-        }
-        const key = keyOf(sim, held);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        next.push({ snap: done ? null : sim.snapshot(), held, parent: i, done, tick: sim.tick });
-        if (done) {
-          history.push(layer.map((s) => ({ parent: s.parent, held: s.held })));
-          return reconstruct(history, { parent: i, held }, sim.tick);
-        }
-      }
-    }
-    if (!next.length) return { fail: true, best, bestX, beat: ((bestTick / 240 + (level.meta.offset || 0)) * level.meta.bpm) / 60 };
-    let kept = next;
-    if (next.length > WIDTH) {
-      // Keep a spread of states: sort by height/velocity, take evenly spaced samples.
-      next.sort((a, b) => {
-        const pa = a.snap.players[0], pb = b.snap.players[0];
-        return pa.y - pb.y || pa.vy - pb.vy;
-      });
-      kept = [];
-      for (let j = 0; j < WIDTH; j++) kept.push(next[Math.floor((j * next.length) / WIDTH)]);
-    }
-    history.push(layer.map((s) => ({ parent: s.parent, held: s.held })));
-    layer = kept;
-    if (d % 400 === 0) process.stdout.write(`\r  layer ${d} states ${layer.length} progress ${(best * 100).toFixed(1)}%   `);
-  }
-  return { fail: true, best, bestX };
-}
-
-function reconstruct(history, last, endTick) {
-  const actions = [last.held];
-  let idx = last.parent;
-  for (let d = history.length - 1; d >= 1; d--) {
-    const s = history[d][idx];
-    actions.push(s.held);
-    idx = s.parent;
-  }
-  actions.reverse();
-  const held = [];
-  for (const a of actions) for (let k = 0; k < STEP; k++) held.push(a);
-  held.length = Math.min(held.length, endTick);
-  return { presses: heldToPresses(held), endTick };
-}
-
-/** For each press, how many ticks earlier/later it could happen and still reach the next press. */
-function windows(rec) {
+  const holdTick = [];
+  replay(level, rec, { onTick: (s) => holdTick.push(HOLD_MODES.has(s.players[0].mode)) });
+  const isHold = (p) => { for (let k = -1; k <= 60; k++) if (holdTick[p + k]) return true; return false; };
   const out = [];
-  const base = rec.presses;
-  for (let i = 0; i < base.length; i++) {
-    const limit = i + 1 < base.length ? base[i + 1][0] + 240 : Infinity;
-    const ok = (shift) => {
-      const ps = base.map((p) => p.slice());
-      ps[i][0] += shift; ps[i][1] += shift;
-      if (i > 0 && ps[i][0] <= ps[i - 1][1]) return false;
-      if (i + 1 < ps.length && ps[i][1] >= ps[i + 1][0]) return false;
-      const r = replay(level, { presses: ps }, { maxTicks: limit === Infinity ? undefined : limit });
-      return r.completed || (!r.dead && r.tick >= limit);
+  for (let i = 0; i < ps.length; i++) {
+    const [p, r] = ps[i];
+    if (isHold(p)) continue;
+    const s0 = Math.max(i ? ps[i - 1][1] : 0, p - 61);
+    // State after tick s0 following the recording.
+    const base = replay(level, { presses: ps.slice(0, i) }, { maxTicks: s0, sim });
+    if (base.dead) continue;
+    const snap = sim.snapshot();
+    const survives = (d) => {
+      if (p + d <= s0) return false;
+      sim.restore(snap);
+      const inp = { held: false, pressed: false };
+      for (let t = s0 + 1; t < r + d; t++) {
+        inp.held = t >= p + d;
+        inp.pressed = t === p + d;
+        sim.step(inp);
+        sim.events.length = 0;
+        if (sim.dead) return false;
+        if (sim.completed) return true;
+      }
+      return search({ level, sim, start: sim.snapshot(), startHeld: true, horizon: 300, width: 32, step: 6 }).ok;
     };
-    let lo = 0, hi = 0;
-    while (lo > -60 && ok(lo - 1)) lo--;
-    while (hi < 60 && ok(hi + 1)) hi++;
-    out.push([base[i][0], lo, hi]);
+    // Binary-search each edge of the (assumed contiguous) window, up to ±60 ticks.
+    const edge = (dir) => {
+      let good = 0, bad = 61;
+      while (bad - good > 1) {
+        const mid = (good + bad) >> 1;
+        if (survives(dir * mid)) good = mid; else bad = mid;
+      }
+      return good;
+    };
+    const lo = -edge(-1), hi = edge(1);
+    out.push({ tick: p, lo, hi, w: hi - lo + 1 });
   }
   return out;
 }
 
 const t0 = Date.now();
-console.log(`Solving ${level.meta.name}${needCoins ? ' (all coins)' : ''}…`);
-const res = solve();
+console.log(`Solving ${level.meta.name}${needCoins ? ' (coins)' : ''}…`);
+const res = search({
+  level, width: WIDTH, step: STEP, pressAllowed, coins: needCoins, coinsOk,
+  onProgress: (d, n, best) => process.stdout.write(`\r  layer ${d} states ${n} progress ${(best * 100).toFixed(1)}%   `),
+});
 process.stdout.write('\n');
-if (res.fail) {
-  console.log(`FAILED — best progress ${(res.best * 100).toFixed(1)}% at x=${res.bestX.toFixed(1)} blocks, beat ${res.beat && res.beat.toFixed(2)}`);
+if (!res.ok) {
+  console.log(`FAILED — best progress ${(res.best * 100).toFixed(1)}% at x=${res.bestX.toFixed(1)} blocks, beat ${beatOf(res.bestTick).toFixed(2)}`);
   process.exit(2);
 }
-const rec = { level: level.meta.id, hz: 240, coins: needCoins, presses: res.presses };
+const raw = { level: level.meta.id, hz: 240, coins: needCoins && onlyCoin < 0, presses: res.presses };
+const rec = flag('--raw') ? raw : minimize(raw);
 const check = replay(level, rec);
 console.log(`Solved in ${((Date.now() - t0) / 1000).toFixed(1)}s: ${rec.presses.length} presses, ${res.endTick} ticks, replay ${check.completed ? 'OK' : 'BROKEN'}`);
-if (!flag('--no-windows')) {
-  const w = windows(rec);
-  const tight = w.filter(([, lo, hi]) => hi - lo + 1 < 12);
-  const ms = (n) => ((n * 1000) / 240).toFixed(0);
-  console.log(`Press windows (ms): min ${ms(Math.min(...w.map(([, lo, hi]) => hi - lo + 1)))}, median ${ms(w.map(([, lo, hi]) => hi - lo + 1).sort((a, b) => a - b)[Math.floor(w.length / 2)])}`);
-  for (const [tick, lo, hi] of tight) console.log(`  tight press at tick ${tick} (${(tick / 240).toFixed(2)}s): ${ms(hi - lo + 1)} ms window`);
+if (flag('--fair')) {
+  const w = fairness(rec);
+  const sorted = w.map((x) => x.w).sort((a, b) => a - b);
+  console.log(`Recoverable windows over ${w.length} timed presses (ms): min ${ms(sorted[0])}, 10th pct ${ms(sorted[Math.floor(sorted.length * 0.1)])}, median ${ms(sorted[Math.floor(sorted.length / 2)])}`);
+  for (const x of w.filter((q) => q.w < opt('--warn', 18))) console.log(`  tight press at beat ${beatOf(x.tick).toFixed(2)} (${(x.tick / 240).toFixed(2)}s): ${ms(x.w)} ms (${ms(-x.lo)} early / ${ms(x.hi)} late)`);
 }
-if (!flag('--no-write')) {
+if (!flag('--no-write') && onlyCoin < 0 && check.completed) {
   const out = join(root, 'tests/recordings', `${level.meta.id}${needCoins ? '.coins' : ''}.json`);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${JSON.stringify(rec)}\n`);

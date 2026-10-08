@@ -46,9 +46,31 @@ function resize(p, fn) {
   if (p.onGround) p.y = feet + (p.h * 0.5) * p.grav;
 }
 
+const nudgeHits = new Array(64);
+
+/**
+ * After a hitbox grows (mode/size portal), push the player vertically out of solids it now
+ * overlaps by at most the growth amount, so portals inside tight gates never cause deaths.
+ */
+function nudgeOut(sim, p, grow) {
+  if (grow <= 0 || !sim.world) return;
+  const hw = p.w * 0.5, hh = p.h * 0.5;
+  const n = sim.world.query(p.x - hw, p.y - hh, p.x + hw, p.y + hh, nudgeHits);
+  for (let i = 0; i < n; i++) {
+    const o = nudgeHits[i];
+    if (o.kind !== 'solid') continue;
+    const up = o.maxY - (p.y - hh);
+    const down = p.y + hh - o.minY;
+    if (up > 0 && up <= grow + 0.01 && up < down) p.y += up;
+    else if (down > 0 && down <= grow + 0.01) p.y -= down;
+  }
+}
+
 export function setMode(sim, p, mode) {
   if (p.mode === mode) return;
+  const h0 = p.h;
   resize(p, () => { p.mode = mode; });
+  nudgeOut(sim, p, p.h - h0);
   p.dashing = false;
   p.boost = 0;
   if (mode === 'ship' || mode === 'ufo' || mode === 'swing') p.vy *= 0.5;
@@ -57,9 +79,11 @@ export function setMode(sim, p, mode) {
   p.prot = p.rot;
 }
 
-export function setMini(p, mini) {
+export function setMini(p, mini, sim = null) {
   if (p.mini === mini) return;
+  const h0 = p.h;
   resize(p, () => { p.mini = mini; });
+  if (sim) nudgeOut(sim, p, p.h - h0);
 }
 
 function flipGravity(p) { p.grav = -p.grav; p.onGround = false; p.coyote = 0; }
@@ -187,7 +211,8 @@ function useOrb(sim, p, o) {
     case 'pink': vL = ORB_VEL.pink * mul; break;
     case 'red': vL = ORB_VEL.red * mul; break;
     case 'blue': flipGravity(p); vL = -ORB_VEL.blue * Math.max(mul, 0.5); break;
-    case 'green': flipGravity(p); vL = ORB_VEL.green * mul; break;
+    // Green = power flip: like blue but launches toward the new floor at full jump speed.
+    case 'green': flipGravity(p); vL = -ORB_VEL.green * Math.max(mul, 0.5); break;
     case 'black': vL = -ORB_VEL.black; break;
     case 'dash': {
       let a = -(((o.rot % 360) + 540) % 360 - 180);
