@@ -142,6 +142,20 @@ export class LevelBuilder {
   coin(x, y) { return this.put('coin', x, y); }
   /** Portal centred at (x, y) blocks. */
   portal(key, x, y = 1.5, opts) { return this.put(key, x, y, opts); }
+  /**
+   * Portal the player cannot fly around: block columns fill the space between the portal and
+   * the band floor/ceiling (in blocks). `yc` is the portal centre height.
+   */
+  gate(key, x, yc = 1.5, floor = 0, ceil = 10, blockKey = 'block') {
+    this.portal(key, x, yc);
+    const cx = x - 0.5;
+    const lo = Math.floor(yc - 1.5);
+    const hi = Math.ceil(yc + 1.5);
+    if (lo > floor) this.block(cx, floor, 1, lo - floor, blockKey);
+    if (ceil > hi) this.block(cx, hi, 1, ceil - hi, blockKey);
+    return this;
+  }
+
   deco(key, x, y, opts) { return this.put(key, x, y, opts); }
   text(x, y, text, opts = {}) { return this.put('text', x, y, { ...opts, props: { text, ...(opts.props || {}) } }); }
 
@@ -179,11 +193,6 @@ export class LevelBuilder {
   spikesAt(beat, n = 1, y = 0) {
     const cx = this.apex(beat) - n / 2;
     return this.spikes(cx, y, n);
-  }
-
-  /** The x of the left edge of a platform the cube lands on when jumping on `beat`. */
-  platformAfterJump(beat, h) {
-    return this.apex(beat) + 0.5;
   }
 
   build() {

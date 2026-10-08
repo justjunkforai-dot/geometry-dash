@@ -61,11 +61,11 @@ layout();
 const params = new URLSearchParams(location.search);
 
 /** Minimal play state used until the menus exist. */
-function playState(levelIndex, bot) {
+function playState(data, bot) {
   let game = null;
   return {
     enter() {
-      game = new Game(app, LEVELS[levelIndex].data, { levelId: LEVELS[levelIndex].id, bot });
+      game = new Game(app, data, { levelId: data.meta.id, bot });
       game.start();
       app.game = game;
       if (params.has('t')) game.skipTo(Number(params.get('t')));
@@ -143,12 +143,13 @@ async function runTests() {
 async function boot() {
   if (params.has('test')) { await runTests(); return; }
   const idx = Number(params.get('level') || 1) - 1;
+  const data = params.has('showcase') ? (await import('../tests/levels/showcase.js')).default : LEVELS[idx].data;
   let bot = null;
   if (params.has('bot')) {
-    const res = await fetch(`tests/recordings/${LEVELS[idx].id}.json`);
+    const res = await fetch(`tests/recordings/${data.meta.id}.json`);
     bot = new RecordingInput(await res.json());
   }
-  setState(playState(idx, bot));
+  setState(playState(data, bot));
   requestAnimationFrame(frame);
 }
 boot();

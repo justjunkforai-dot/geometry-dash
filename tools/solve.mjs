@@ -22,7 +22,7 @@ const flag = (f) => args.includes(f);
 const opt = (f, d) => { const i = args.indexOf(f); return i >= 0 ? Number(args[i + 1]) : d; };
 if (!name) { console.error('usage: solve.mjs <levelModule> [--coins] [--width N] [--step N]'); process.exit(1); }
 
-const level = (await import(join(root, 'js/levels', `${name}.js`))).default;
+const level = (await import(name.includes('/') ? join(root, name) : join(root, 'js/levels', `${name}.js`))).default;
 const STEP = opt('--step', 6);
 const WIDTH = opt('--width', 96);
 const needCoins = flag('--coins');

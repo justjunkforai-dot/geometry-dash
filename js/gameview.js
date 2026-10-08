@@ -142,7 +142,7 @@ function drawTrail(g, r) {
   const maxPts = wave ? n : Math.min(n, 40);
   const chunks = 6;
   const per = Math.ceil(maxPts / chunks);
-  const layers = wave ? [[18, 0.18, prof.colors.g], [7, 0.9, prof.colors.p1], [2.5, 1, '#ffffff']] : [[8, 0.35, prof.colors.g]];
+  const layers = wave ? [[24, 0.22, prof.colors.g], [10, 0.85, prof.colors.p1], [3.5, 1, '#ffffff']] : [[8, 0.35, prof.colors.g]];
   for (const [w, al, col] of layers) {
     ctx.strokeStyle = col;
     ctx.lineWidth = (w * (head && head.mini ? 0.6 : 1)) / r.s;

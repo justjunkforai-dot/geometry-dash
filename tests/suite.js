@@ -11,6 +11,8 @@ import { Game } from '../js/game.js';
 import { Particles } from '../js/particles.js';
 import { replay } from './bot.js';
 import { TRACKS, degree } from '../js/tracks.js';
+import { mechanicsTests } from './suite-mechanics.js';
+import showcase from './levels/showcase.js';
 
 class AssertionError extends Error {}
 export function assert(cond, msg) { if (!cond) throw new AssertionError(msg); }
@@ -213,6 +215,15 @@ export async function runSuite(ctx) {
     const a = replay(first.data, rec, { maxTicks: 3000 });
     const b = replay(copy, rec, { maxTicks: 3000 });
     assert(a.hash === b.hash, 'hash differs after round trip');
+  });
+
+  await mechanicsTests(test, { assert, run, lvl });
+
+  await test('bot completes the all-mechanics showcase level', async () => {
+    const rec = await ctx.loadRecording('showcase');
+    assert(rec, 'missing recording');
+    const r = replay(showcase, rec);
+    assert(r.completed, `bot died at ${(r.progress * 100).toFixed(1)}%`);
   });
 
   await test('music data: every pattern is well-formed', () => {
