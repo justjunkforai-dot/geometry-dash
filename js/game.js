@@ -228,6 +228,7 @@ export class Game {
           this.emitHook('jump');
           break;
         case 'orb': this.emitHook('jump'); break;
+        case 'mode-left': this.emitHook('modeLeft', { mode: e.a, grazed: e.b }); break;
         case 'particles': {
           const pr = e.b;
           const kind = pr.kind === 'confetti' ? P_CONFETTI : pr.kind === 'sparks' ? P_SPARK : P_CIRCLE;

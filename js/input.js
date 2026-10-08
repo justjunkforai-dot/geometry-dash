@@ -170,6 +170,8 @@ export class Input extends JumpQueue {
   onPointerDown(e) {
     if (!this.gameplay) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // Taps on on-screen controls (pause, checkpoints) are not jumps.
+    if (e.target.closest && e.target.closest('button, input, select, textarea, label, a, .no-jump')) return;
     e.preventDefault();
     this.press(`p:${e.pointerId}`, e.timeStamp);
   }

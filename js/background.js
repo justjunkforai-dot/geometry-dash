@@ -186,9 +186,12 @@ export function drawBackground(ctx, style, pal, camX, camY, pulse, t) {
       const hy = 700 + yOff;
       ctx.drawImage(pal.blobLine, VIEW_W / 2 - 380, hy - 560, 760, 760);
       ctx.fillStyle = pal.sun;
+      ctx.save();
       ctx.beginPath(); ctx.arc(VIEW_W / 2, hy - 160, 170, Math.PI, 0); ctx.fill();
+      ctx.clip();
       ctx.fillStyle = pal.top;
-      for (let i = 0; i < 6; i++) ctx.fillRect(VIEW_W / 2 - 180, hy - 150 - i * 26, 360, 4 + i * 1.5);
+      for (let i = 0; i < 6; i++) ctx.fillRect(VIEW_W / 2 - 180, hy - 168 - i * 26, 360, 10 - i * 1.2);
+      ctx.restore();
       const o = scroll(camX, 0.1);
       ctx.fillStyle = l3;
       for (let k = 0; k < 2; k++) { ctx.save(); ctx.translate(-o + k * TILE, yOff); ctx.fill(g.paths[0].p); ctx.restore(); }

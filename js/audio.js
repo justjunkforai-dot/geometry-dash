@@ -140,6 +140,9 @@ export class AudioEngine {
 
   musicPlaying() { return !!this.session; }
 
+  /** Id of the playing (or requested) track. */
+  currentTrack() { return this.session ? this.session.id : this.want ? this.want.id : null; }
+
   /** Song time currently audible (seconds), or null. */
   musicTime() {
     if (!this.session) return null;

@@ -107,6 +107,7 @@ export class Sim {
     switch (o.def.action) {
       case 'mode': {
         if (p.mode === v && this.players.every((q) => q.mode === v)) return;
+        this.emit('mode-left', o.x, o.y, this.players[0].mode, this.players[0].grazed);
         for (const q of this.players) setMode(this, q, v);
         const c = this.corridorFor(v, o.y);
         if (c || !this.dual) this.corridor = c;
