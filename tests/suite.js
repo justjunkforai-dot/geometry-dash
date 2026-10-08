@@ -12,6 +12,7 @@ import { Particles } from '../js/particles.js';
 import { replay } from './bot.js';
 import { TRACKS, degree } from '../js/tracks.js';
 import { mechanicsTests } from './suite-mechanics.js';
+import { floatingSpikes } from '../js/lint.js';
 import showcase from './levels/showcase.js';
 
 class AssertionError extends Error {}
@@ -227,6 +228,13 @@ export async function runSuite(ctx) {
           }
         },
       });
+    }
+  });
+
+  await test('built-in levels have no floating spikes', () => {
+    for (const L of LEVELS) {
+      const f = floatingSpikes(L.data);
+      assert(!f.length, `${L.id}: ${f.map((x) => x.msg).join('; ')}`);
     }
   });
 

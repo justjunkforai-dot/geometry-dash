@@ -34,8 +34,8 @@ let end = stepUp(b, 24, 1, 10);
 b.spikesAt(26, 1, 1);
 b.deco('pillar', end - 0.5, 1.5);
 stepUp(b, 28, 1, 4);
-end = stepUp(b, 29, 1, 9, 1);
-b.block(X(29) + 2.5, 0, 9, 1);
+end = stepUp(b, 29, 1, 10, 1);
+b.block(X(29) + 2.5, 0, 10, 1);
 b.spikesAt(31, 1, 2);
 pit(b, 34, 2);
 b.spikesAt(36);
@@ -75,7 +75,7 @@ b.spikesAt(70);
 
 // E (72-87): red pad climb, staircase down; coin 2 sits in the air over a double spike.
 colors(b, 72, { bg: '#0f1d5e', obj: '#7dff8a', line: '#b4ffbf' });
-end = padTo(b, 72, 'Red', 5, 8);
+end = padTo(b, 72, 'Red', 5, 17);
 b.spikesAt(75.6, 1, 5);
 b.stairs(end, 0, 3, -1, 2);
 b.spikesAt(80, 2);

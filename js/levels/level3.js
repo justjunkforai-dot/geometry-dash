@@ -29,7 +29,7 @@ b.spikes(X(14) + 1.4, 0, 1, { small: true });
 b.spikesAt(16, 2);
 airOrb(b, 17, 17.5, 'Yellow');
 b.gap(X(17) + 1.4, 5);
-stepUp(b, 20, 1, 8);
+stepUp(b, 20, 1, 11);
 b.spikesAt(22, 1, 1);
 
 // B (24-39): gravity up — run on a ceiling.
