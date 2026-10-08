@@ -12,6 +12,7 @@ import { Particles } from '../js/particles.js';
 import { replay } from './bot.js';
 import { TRACKS, degree } from '../js/tracks.js';
 import { mechanicsTests } from './suite-mechanics.js';
+import { editorTests } from './suite-editor.js';
 import { floatingSpikes } from '../js/lint.js';
 import showcase from './levels/showcase.js';
 
@@ -231,6 +232,36 @@ export async function runSuite(ctx) {
     }
   });
 
+  await test('flying corridors match their tunnels (no space to fly around them)', () => {
+    const out = [];
+    for (const L of LEVELS) {
+      const rec = recs[L.id];
+      if (!rec) continue;
+      let portalX = -1e9, mode = '';
+      replay(L.data, rec, {
+        onTick: (sim, t) => {
+          const c = sim.corridor;
+          const p = sim.players[0];
+          const key = `${p.mode}${sim.dual}`;
+          if (key !== mode) { mode = key; portalX = p.x; }
+          // Dual bands share the corridor; a gate's own column (or the end of a dual band) sits
+          // right after the portal.
+          if (t % 6 || !c || sim.dual || p.x - portalX < 2 * BLOCK) return;
+          const n = sim.world.query(p.x - 2, c.floor - 1, p.x + 2, c.ceil + 1, out);
+          let top = -1, bottom = Infinity;
+          for (let i = 0; i < n; i++) {
+            const o = out[i];
+            if (o.kind !== 'solid' && o.kind !== 'slope') continue;
+            if (o.minY > p.y) top = Math.max(top, o.maxY);
+            if (o.maxY < p.y) bottom = Math.min(bottom, o.minY);
+          }
+          assert(top < 0 || c.ceil - top < BLOCK / 2, `${L.id}: open space above the tunnel at x=${(p.x / BLOCK).toFixed(1)}`);
+          assert(bottom === Infinity || bottom - c.floor < BLOCK / 2, `${L.id}: open space below the tunnel at x=${(p.x / BLOCK).toFixed(1)}`);
+        },
+      });
+    }
+  });
+
   await test('built-in levels have no floating spikes', () => {
     for (const L of LEVELS) {
       const f = floatingSpikes(L.data);
@@ -254,6 +285,8 @@ export async function runSuite(ctx) {
     const r = replay(showcase, rec);
     assert(r.completed, `bot died at ${(r.progress * 100).toFixed(1)}%`);
   });
+
+  await editorTests(test, { assert, loadRecording: ctx.loadRecording });
 
   await test('music data: every pattern is well-formed', () => {
     for (const [id, tr] of Object.entries(TRACKS)) {

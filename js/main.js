@@ -23,6 +23,7 @@ import { levelSelect } from './screens/levels.js';
 import { playHud, pauseMenu, completeScreen } from './screens/play.js';
 import { settingsScreen } from './screens/settings.js';
 import { Achievements } from './achievements.js';
+import { Editor } from './editor.js';
 
 const stage = document.getElementById('stage');
 const canvas = document.getElementById('game');
@@ -145,6 +146,7 @@ const playState = {
   update(now, dt) {
     const g = app.game;
     g.update(now, dt);
+    if (g.state === 'ended') { g.state = 'leaving'; app.exitGame(); return; }
     if (g.state === 'complete' && !this.completeShown && g.completeT > 1.3) {
       this.completeShown = true;
       ui.clearHud();
@@ -160,6 +162,14 @@ const STATES = {
   credits: menuState(credits),
   settings: menuState(settingsScreen),
   play: playState,
+  editor: {
+    ownsKeys: true,
+    enter(data) { app.editor = app.editor || new Editor(app); app.editor.enter(data || {}); },
+    exit() { app.editor.exit(); },
+    update(now, dt) { app.editor.update(now, dt); },
+    render() { app.editor.render(); },
+    onBack() { return app.editor.onBack(); },
+  },
 };
 app.registerState = (name, st) => { STATES[name] = st; };
 app.menuState = menuState;
@@ -241,15 +251,20 @@ app.bestFor = (g) => (g.opts.levelId ? app.progress.level(g.opts.levelId).best :
 
 // ---- gameplay hooks (progress, achievements) ---------------------------------------------------
 app.hooks = {
-  attempt: (g) => { if (!g.opts.bot) app.progress.onAttempt(g.opts.levelId); app.achievements.check(); },
+  attempt: (g) => {
+    if (g.opts.bot) return;
+    if (g.opts.playtest) app.achievements.unlock('playtest');
+    else app.progress.onAttempt(g.opts.levelId);
+    app.achievements.check();
+  },
   death: (g, d) => {
     if (g.opts.bot) return;
-    app.progress.onRunEnd(g.opts.levelId, d.pct, d.practice, d);
+    if (!g.opts.playtest) app.progress.onRunEnd(g.opts.levelId, d.pct, d.practice, d);
     app.achievements.onDeath(g, d);
   },
   complete: (g, d) => {
     g.runSummary = { attempts: g.attempt, time: d.time, jumps: d.jumps, coins: d.coins };
-    g.rewards = g.opts.bot ? null : app.progress.onComplete(g.opts.levelId, g.meta, d.practice, d, d.coins);
+    g.rewards = g.opts.bot || g.opts.playtest ? null : app.progress.onComplete(g.opts.levelId, g.meta, d.practice, d, d.coins);
     if (!g.opts.bot) app.achievements.onComplete(g, d);
   },
   jump: (g) => { if (!g.opts.bot) app.achievements.onJump(); },

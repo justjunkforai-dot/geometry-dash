@@ -53,9 +53,10 @@ export class UI {
       const b = e.target.closest && e.target.closest('button');
       if (b && !b.disabled) this.sfx(b.dataset.sfx || 'click');
     });
-    app.input.on('key', (e) => this.onKey(e));
-    app.input.on('nav', (dir) => { this.keyboardNav = true; this.move(dir); });
+    app.input.on('key', (e) => { if (!this.stateOwnsKeys()) this.onKey(e); });
+    app.input.on('nav', (dir) => { if (this.stateOwnsKeys()) return; this.keyboardNav = true; this.move(dir); });
     app.input.on('confirm', () => {
+      if (this.stateOwnsKeys()) return;
       const a = document.activeElement;
       if (a && this.root.contains(a) && a.click) a.click();
       else this.focusFirst();
@@ -63,6 +64,9 @@ export class UI {
   }
 
   sfx(name) { if (this.app.audio) this.app.audio.sfx(name); }
+
+  /** States like the editor handle arrows/Enter themselves unless a dialog is open. */
+  stateOwnsKeys() { return !!(this.app.state && this.app.state.ownsKeys && !this.modal.childElementCount); }
 
   /** The layer that currently owns input (modal > overlay > screen). */
   activeLayer() {
@@ -233,6 +237,9 @@ export class UI {
   }
 }
 
+/** "1 object" / "3 objects". */
+export const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
 // ---- inline SVG icons (24×24 viewBox) ----------------------------------------------------------
 const svg = (d, extra = '') => `<svg viewBox="0 0 24 24" width="100%" height="100%" ${extra}><path d="${d}" fill="currentColor"/></svg>`;
 export const ICONS = {
@@ -255,6 +262,15 @@ export const ICONS = {
   trash: svg('M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z'),
   edit: svg('M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25z'),
   star: svg('M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z'),
+  undo: svg('M12.5 8c-2.65 0-5.05 1-6.9 2.6L2 7v9h9l-3.62-3.62A7.95 7.95 0 0 1 12.5 10c3.54 0 6.55 2.31 7.6 5.5l2.37-.78A10.02 10.02 0 0 0 12.5 8z'),
+  redo: svg('M18.4 10.6A10.02 10.02 0 0 0 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16a8 8 0 0 1 7.6-5.5c1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z'),
+  save: svg('M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z'),
+  folder: svg('M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z'),
+  download: svg('M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z'),
+  upload: svg('M5 20h14v-2H5v2zm4-4h6v-6h4l-7-7-7 7h4v6z'),
+  check: svg('M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'),
+  cursor: svg('M7 2l12 11.2-5.8.5 3.3 7.3-2.2 1-3.2-7.4L7 18.5z'),
+  grid: svg('M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z'),
   coin: svg('M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 4l1.9 3.9 4.1.6-3 2.9.7 4.1-3.7-1.9-3.7 1.9.7-4.1-3-2.9 4.1-.6z'),
   fullscreen: svg('M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z'),
 };

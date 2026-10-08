@@ -125,7 +125,8 @@ export class Game {
     }
     if (this.state === 'dead') {
       this.deathTimer -= dt;
-      if (this.deathTimer <= 0) this.beginAttempt();
+      // Playtests return to the editor after a death (practice runs keep retrying).
+      if (this.deathTimer <= 0) { if (this.opts.playtest && !this.practice) this.state = 'ended'; else this.beginAttempt(); }
     } else if (this.state === 'countdown') {
       const before = Math.ceil(this.countdown);
       this.countdown -= dt;
@@ -258,7 +259,7 @@ export class Game {
   onDeath() {
     const sim = this.sim;
     this.state = 'dead';
-    this.deathTimer = this.settings.restartDelay;
+    this.deathTimer = this.opts.playtest && !this.practice ? Math.max(0.7, this.settings.restartDelay) : this.settings.restartDelay;
     for (const p of sim.players) this.explode(p);
     this.shakeAmp = 14;
     this.flash = this.settings.reduceFlash ? 0.15 : 0.55;

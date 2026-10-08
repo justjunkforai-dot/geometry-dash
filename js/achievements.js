@@ -80,7 +80,7 @@ export class Achievements {
   }
 
   onComplete(g, d) {
-    if (g.opts.playtest) { this.unlock('playtest'); return; }
+    if (g.opts.playtest) return;
     if (!d.practice) {
       if (LEVELS.some((l) => l.id === g.opts.levelId)) this.unlock(`beat-${g.opts.levelId}`);
       this.unlock('halfway');

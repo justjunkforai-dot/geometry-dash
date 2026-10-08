@@ -99,6 +99,13 @@ export class Progress {
     l.best = 100;
     l.completions++;
     this.data.stats.completions++;
+    // Custom levels track best/completions but pay no currency (no farming with trivial levels).
+    if (!LEVELS.some((lv) => lv.id === id)) {
+      l.completed = true;
+      r.custom = true;
+      this.storage.save();
+      return r;
+    }
     const stars = meta.stars || 0;
     if (!l.completed) {
       l.completed = true;

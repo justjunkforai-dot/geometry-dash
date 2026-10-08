@@ -140,6 +140,15 @@ export class Storage {
     this.save();
   }
 
+  // ---- editor autosave (crash recovery) ----------------------------------------------------
+  saveAutosave(obj) { this.write('neondash.editor.autosave', JSON.stringify(obj)); }
+  clearAutosave() { this.remove('neondash.editor.autosave'); }
+  loadAutosave() {
+    const raw = this.read('neondash.editor.autosave');
+    if (!raw) return null;
+    try { const o = JSON.parse(raw); return o && o.level && o.level.meta ? o : null; } catch { return null; }
+  }
+
   // ---- custom levels -----------------------------------------------------------------------
   listCustom() { return this.data.customIndex.slice().sort((a, b) => b.updated - a.updated); }
 

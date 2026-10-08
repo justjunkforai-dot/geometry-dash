@@ -148,7 +148,11 @@ export class Input extends JumpQueue {
     }
     const tag = e.target && e.target.tagName;
     const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable);
-    if (typing) return;
+    if (typing) {
+      // Esc still closes dialogs from inside a text field.
+      if (e.code !== 'Escape') return;
+      e.target.blur();
+    }
     const action = this.actionFor(e.code);
     if (action === 'jump' && this.gameplay) {
       e.preventDefault();

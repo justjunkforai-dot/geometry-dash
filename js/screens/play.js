@@ -47,6 +47,12 @@ function counter(app, icon, label, value) {
   return el;
 }
 
+function rewardNote(game, rewards) {
+  if (game.opts.playtest) return 'Playtest passed: your level can be beaten.';
+  if (game.practice) return 'Practice runs do not award stars or coins.';
+  return rewards && rewards.custom ? 'Custom levels do not award stars or orbs.' : '';
+}
+
 export function completeScreen(app, game, rewards, run) {
   const ui = app.ui;
   const entry = game.opts.entry;
@@ -68,9 +74,9 @@ export function completeScreen(app, game, rewards, run) {
       h('div', {}, h('small', {}, 'Time'), h('b', {}, fmtTime(run.time))),
       h('div', {}, h('small', {}, 'Jumps'), h('b', {}, String(run.jumps))),
       h('div', {}, h('small', {}, 'Coins'), h('span', { class: 'coins' }, coins.map((c) => h('span', { class: `coin ${c ? 'got' : ''}`, svg: ICONS.coin }))))),
-    rewards && !game.practice ? h('div', { class: 'rewards' },
+    rewards && !game.practice && !rewards.custom ? h('div', { class: 'rewards' },
       counter(app, ICONS.star, 'Stars', rewards.stars),
       counter(app, ICONS.coin, 'Orbs', rewards.orbs),
-      counter(app, ICONS.diamond, 'Diamonds', rewards.diamonds)) : h('p', { class: 'muted' }, game.practice ? 'Practice runs do not award stars or coins.' : ''),
+      counter(app, ICONS.diamond, 'Diamonds', rewards.diamonds)) : h('p', { class: 'muted' }, rewardNote(game, rewards)),
     h('div', { class: 'complete-actions' }, actions)));
 }

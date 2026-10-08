@@ -1,5 +1,5 @@
 /** Level select: carousel of built-in levels and the "My Levels" list of custom levels. */
-import { h, ICONS, faceSVG } from '../ui.js';
+import { h, ICONS, faceSVG, plural } from '../ui.js';
 import { LEVELS } from '../levels/index.js';
 import { DIFFICULTIES } from '../progress.js';
 
@@ -101,7 +101,7 @@ function myLevels(app) {
   return h('div', { class: 'my-levels' }, list.map((c) => {
     const st = app.progress.level(c.id);
     return h('article', { class: 'my-level panel', 'aria-label': c.name },
-      h('div', {}, h('h3', {}, c.name), h('p', { class: 'muted' }, `${c.objects} objects · best ${st.best}% · ${new Date(c.updated).toLocaleDateString()}`)),
+      h('div', {}, h('h3', {}, c.name), h('p', { class: 'muted' }, `${plural(c.objects, 'object')} · best ${st.best}% · ${new Date(c.updated).toLocaleDateString()}`)),
       h('div', { class: 'my-actions' },
         ui.button('Play', () => {
           const data = app.storage.loadCustom(c.id);
