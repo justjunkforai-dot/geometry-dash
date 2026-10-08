@@ -1,0 +1,118 @@
+/* Neon Dash — layout and UI styles. The #ui layer is a fixed 1920×1080 design surface scaled
+   to the letterboxed stage with a CSS transform, so all sizes below are in design pixels. */
+
+:root {
+  --bg: #07041a;
+  --panel: rgba(14, 8, 40, 0.86);
+  --panel-2: rgba(30, 18, 78, 0.9);
+  --line: #7df9ff;
+  --accent: #ff4fd8;
+  --gold: #ffd84a;
+  --text: #f4f1ff;
+  --muted: #a99fd6;
+  --focus: #ffe14d;
+  --danger: #ff3b5c;
+  --ok: #3dff7a;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ui-scale: 1;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  font-family: var(--font);
+  color: var(--text);
+}
+
+#stage {
+  position: absolute;
+  overflow: hidden;
+  background: var(--bg);
+  touch-action: none;
+}
+
+#game {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#ui {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+#ui > * { pointer-events: auto; }
+#ui > .passthrough { pointer-events: none; }
+#ui > .passthrough * { pointer-events: auto; }
+
+#transition {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+  opacity: 0;
+  clip-path: circle(150% at 50% 50%);
+}
+
+#transition.iris-in { opacity: 1; animation: iris-in 0.28s ease-in forwards; }
+#transition.iris-out { opacity: 1; animation: iris-out 0.32s ease-out forwards; }
+@keyframes iris-in { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(75% at 50% 50%); } }
+@keyframes iris-out { from { clip-path: circle(75% at 50% 50%); } to { clip-path: circle(0% at 50% 50%); } }
+
+.noscript { color: #fff; font: 20px var(--font); text-align: center; margin-top: 30vh; }
+
+#rotate-hint {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  background: rgba(5, 3, 18, 0.94);
+  text-align: center;
+  font-size: 18px;
+}
+#rotate-hint[hidden] { display: none; }
+#rotate-hint button {
+  font: 700 18px var(--font);
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: transparent;
+  color: var(--text);
+}
+
+.test-panel {
+  position: absolute;
+  inset: 40px;
+  margin: 0;
+  padding: 24px;
+  overflow: auto;
+  background: rgba(5, 3, 18, 0.95);
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  font: 22px/1.4 ui-monospace, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  user-select: text;
+}
