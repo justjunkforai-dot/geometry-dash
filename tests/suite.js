@@ -10,6 +10,7 @@ import { JumpQueue } from '../js/input.js';
 import { Game } from '../js/game.js';
 import { Particles } from '../js/particles.js';
 import { replay } from './bot.js';
+import { TRACKS, degree } from '../js/tracks.js';
 
 class AssertionError extends Error {}
 export function assert(cond, msg) { if (!cond) throw new AssertionError(msg); }
@@ -213,6 +214,41 @@ export async function runSuite(ctx) {
     const b = replay(copy, rec, { maxTicks: 3000 });
     assert(a.hash === b.hash, 'hash differs after round trip');
   });
+
+  await test('music data: every pattern is well-formed', () => {
+    for (const [id, tr] of Object.entries(TRACKS)) {
+      const fits = (str) => str.length > 0 && (16 % str.length === 0 || str.length % 16 === 0);
+      for (const d of Object.values(tr.drums)) for (const str of Object.values(d)) assert(fits(str) && /^[xXo.]+$/.test(str), `${id}: bad drum pattern "${str}"`);
+      for (const group of ['bass', 'lead', 'arp']) {
+        for (const [n, str] of Object.entries(tr[group])) {
+          assert(fits(str), `${id}.${group}.${n}: length ${str.length}`);
+          for (const ch of str) assert(ch === '.' || ch === '-' || degree(ch) !== null, `${id}.${group}.${n}: bad char ${ch}`);
+        }
+      }
+      for (const sec of tr.song) {
+        assert(tr.drums[sec[1]], `${id}: unknown drums ${sec[1]}`);
+        assert(!sec[2] || tr.bass[sec[2]], `${id}: unknown bass ${sec[2]}`);
+        assert(!sec[3] || tr.lead[sec[3]], `${id}: unknown lead ${sec[3]}`);
+        assert(!sec[4] || tr.arp[sec[4]], `${id}: unknown arp ${sec[4]}`);
+      }
+    }
+    for (const L of LEVELS) assert(TRACKS[L.data.meta.song], `${L.id}: unknown song ${L.data.meta.song}`);
+  });
+
+  if (typeof OfflineAudioContext !== 'undefined') {
+    await test('audio: every track renders audible, unclipped output', async () => {
+      const { AudioEngine } = await import('../js/audio.js');
+      for (const id of Object.keys(TRACKS)) {
+        const buf = await AudioEngine.renderOffline(id, 4);
+        const d = buf.getChannelData(0);
+        let peak = 0, sum = 0;
+        for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; sum += d[i] * d[i]; }
+        const rms = Math.sqrt(sum / d.length);
+        assert(rms > 0.01, `${id} is silent (rms ${rms.toFixed(4)})`);
+        assert(peak < 0.99, `${id} clips (peak ${peak.toFixed(3)})`);
+      }
+    });
+  }
 
   return results;
 }

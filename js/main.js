@@ -12,6 +12,7 @@ import { Particles } from './particles.js';
 import { Game } from './game.js';
 import { LEVELS } from './levels/index.js';
 import { RecordingInput } from '../tests/bot.js';
+import { AudioEngine } from './audio.js';
 
 const stage = document.getElementById('stage');
 const canvas = document.getElementById('game');
@@ -20,9 +21,10 @@ const uiRoot = document.getElementById('ui');
 const renderer = new Renderer(canvas);
 const input = new Input(stage);
 const particles = new Particles();
+const audio = new AudioEngine();
 
 const app = {
-  renderer, input, particles, audio: null,
+  renderer, input, particles, audio,
   settings: {
     restartDelay: 0.4, particles: 1, shake: 1, reduceFlash: false, reduceMotion: false,
     autoCheckpoint: 0, hud: true, fpsCap: 0, showFps: false,
@@ -84,7 +86,16 @@ function setState(s) {
 }
 app.setState = setState;
 
+// Autoplay policy: the AudioContext is created/resumed on the first user gesture.
+const unlock = () => audio.unlock();
+for (const ev of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(ev, unlock, { capture: true });
+document.addEventListener('visibilitychange', () => {
+  audio.setHidden(document.hidden);
+  if (document.hidden && app.game) app.game.pause();
+});
+
 input.on('hitboxes', () => { renderer.opt.hitboxes = !renderer.opt.hitboxes; });
+input.on('mute', () => audio.setMuted(!audio.muted));
 input.on('restart', () => { if (app.game) app.game.restart(); });
 
 let last = performance.now();
@@ -103,6 +114,7 @@ function frame() {
   fpsFrames++;
   if (fpsAcc >= 0.5) { app.fps = fpsFrames / fpsAcc; fpsAcc = 0; fpsFrames = 0; }
   input.pollGamepads(now);
+  audio.update();
   if (app.state) {
     app.state.update(now, dt);
     app.state.render(now);
