@@ -128,6 +128,24 @@ function drawUnder(g, r) {
   }
 }
 
+const RAINBOW = Array.from({ length: 36 }, (_, i) => `hsl(${i * 10}, 100%, 62%)`);
+const layerCache = { key: '', layers: null };
+
+/** Stroke layers [width px, alpha, colour] for a trail style (null = particle-only trail). */
+function trailLayers(style, colors) {
+  const key = `${style}|${colors.p1}|${colors.g}`;
+  if (layerCache.key === key) return layerCache.layers;
+  const L = {
+    wave: [[24, 0.22, colors.g], [10, 0.85, colors.p1], [3.5, 1, '#ffffff']],
+    streak: [[8, 0.35, colors.g]],
+    glow: [[22, 0.22, colors.g], [9, 0.75, colors.p1]],
+    rainbow: [[12, 0.7, '#ffffff']],
+  }[style] || null;
+  layerCache.key = key;
+  layerCache.layers = L;
+  return L;
+}
+
 function drawTrail(g, r) {
   const n = g.trailLen;
   if (n < 2 || g.state === 'dead') return;
@@ -142,13 +160,18 @@ function drawTrail(g, r) {
   const maxPts = wave ? n : Math.min(n, 40);
   const chunks = 6;
   const per = Math.ceil(maxPts / chunks);
-  const layers = wave ? [[24, 0.22, prof.colors.g], [10, 0.85, prof.colors.p1], [3.5, 1, '#ffffff']] : [[8, 0.35, prof.colors.g]];
+  const style = wave ? 'wave' : prof.trail;
+  const layers = trailLayers(style, prof.colors);
+  if (!layers) return;
+  const rainbow = style === 'rainbow';
+  const hueShift = Math.floor(g.time * 12);
   for (const [w, al, col] of layers) {
     ctx.strokeStyle = col;
     ctx.lineWidth = (w * (head && head.mini ? 0.6 : 1)) / r.s;
     for (let c = 0; c < chunks; c++) {
       const s0 = c * per, s1 = Math.min(maxPts - 1, (c + 1) * per);
       if (s0 >= s1) break;
+      if (rainbow) ctx.strokeStyle = RAINBOW[(c * 6 + hueShift) % RAINBOW.length];
       ctx.globalAlpha = al * (1 - c / chunks);
       ctx.beginPath();
       for (let k = s0; k <= s1; k++) {

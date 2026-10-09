@@ -22,6 +22,8 @@ import { mainMenu, credits } from './screens/menu.js';
 import { levelSelect } from './screens/levels.js';
 import { playHud, pauseMenu, completeScreen } from './screens/play.js';
 import { settingsScreen } from './screens/settings.js';
+import { customizeScreen } from './screens/customize.js';
+import { achievementsScreen } from './screens/achievements.js';
 import { Achievements } from './achievements.js';
 import { Editor } from './editor.js';
 
@@ -161,6 +163,8 @@ const STATES = {
   levels: menuState(levelSelect, { onNav: (dir) => app.levelNav && app.levelNav(dir) }),
   credits: menuState(credits),
   settings: menuState(settingsScreen),
+  customize: menuState(customizeScreen),
+  achievements: menuState(achievementsScreen),
   play: playState,
   editor: {
     ownsKeys: true,

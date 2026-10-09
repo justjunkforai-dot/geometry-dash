@@ -150,10 +150,16 @@ export class Game {
     const sim = this.sim;
     const p = sim.players[0];
     const trail = this.app.profile.trail;
-    if (p.mode === 'wave' || (trail && trail !== 'none')) {
+    if (p.mode === 'wave' || trail === 'streak' || trail === 'glow' || trail === 'rainbow') {
       if ((sim.tick & 1) === 0) this.pushTrail(p.x, p.y, p.mode === 'wave' ? 1 : 0);
     } else this.trailLen = 0;
     const q = this.settings.particles;
+    if (p.mode !== 'wave' && sim.tick % 4 === 0 && !sim.dead) {
+      // Particle trails (the line trails are drawn in gameview.js).
+      const c = this.app.profile.colors;
+      if (trail === 'sparks') this.particles.spawn(P_SPARK, p.x - p.w * 0.4, p.y + (Math.random() - 0.5) * p.h * 0.6, -sim.vx * 0.15, (Math.random() - 0.5) * 60, 0.4, 7, Math.random() < 0.5 ? c.g : '#ffffff', 0, 2, 0);
+      else if (trail === 'pixels') this.particles.spawn(P_SQUARE, p.x - p.w * 0.5, p.y + (Math.random() - 0.5) * p.h * 0.5, 0, 0, 0.45, 6, Math.random() < 0.5 ? c.p1 : c.p2, 0, 0, 0);
+    }
     for (const pl of sim.players) {
       if ((pl.mode === 'ship' || pl.mode === 'swing') && sim.tick % (q > 0.6 ? 2 : 5) === 0) {
         const held = this.inp.held;
