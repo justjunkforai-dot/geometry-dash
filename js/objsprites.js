@@ -260,33 +260,3 @@ export function coinSprite(q) {
     ctx.fill();
   });
 }
-
-/**
- * Colour-neutral inner detail for blocks (drawn on top of the tinted fill). Sprites are drawn
- * upside down because the world transform flips y.
- */
-export function blockDetailSprite(style, q) {
-  return sprite(`blk${style}`, 1, 1, q, (ctx) => {
-    const g = ctx.createLinearGradient(0, 0.5, 0, -0.5);
-    g.addColorStop(0, 'rgba(255,255,255,0.10)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(-0.5, -0.5, 1, 1);
-    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
-    ctx.lineWidth = 0.035;
-    switch (style) {
-      case 'panel':
-        ctx.strokeRect(-0.36, -0.36, 0.72, 0.72);
-        ctx.beginPath(); ctx.moveTo(0, -0.36); ctx.lineTo(0, 0.36); ctx.moveTo(-0.36, 0); ctx.lineTo(0.36, 0); ctx.stroke();
-        break;
-      case 'brick':
-        ctx.beginPath();
-        ctx.moveTo(-0.5, 0); ctx.lineTo(0.5, 0);
-        ctx.moveTo(0, 0); ctx.lineTo(0, 0.5); ctx.moveTo(-0.25, 0); ctx.lineTo(-0.25, -0.5); ctx.moveTo(0.25, 0); ctx.lineTo(0.25, -0.5);
-        ctx.stroke();
-        break;
-      default:
-        ctx.strokeRect(-0.32, -0.32, 0.64, 0.64);
-    }
-  });
-}

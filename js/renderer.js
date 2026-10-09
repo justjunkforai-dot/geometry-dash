@@ -8,7 +8,7 @@ import { VIEW_W, VIEW_H, CAMERA_SCALE, BLOCK, MINI_SCALE, COLORS, HAZARD_INSET }
 import { IconCache } from './icons.js';
 import { BgPalette, drawBackground, drawGround } from './background.js';
 import { ColorCache, mix } from './color.js';
-import { sawSprite, padSprite, orbSprite, orbRingSprite, portalSprite, coinSprite, blockDetailSprite } from './objsprites.js';
+import { sawSprite, padSprite, orbSprite, orbRingSprite, portalSprite, coinSprite } from './objsprites.js';
 import { drawDeco } from './deco.js';
 
 const DEG = Math.PI / 180;
@@ -19,6 +19,7 @@ const GLOW_LAYERS = [
 ];
 const SPIKE_GLOW = [[], [[9, 0.25]], [[14, 0.14], [6, 0.3]]];
 const SPIKE_CORE = [[2.6, 1]];
+const BLOCK_STYLES = ['neon', 'panel', 'brick'];
 
 export class Renderer {
   constructor(canvas) {
@@ -61,8 +62,7 @@ export class Renderer {
         case 'pad': s = [padSprite(def.color, q, cb)]; break;
         case 'orb': s = [orbSprite(def.color, q, cb), orbRingSprite(def.color, q, cb)]; break;
         case 'portal': s = [portalSprite(def, q)]; break;
-        case 'coin': s = [coinSprite(q)]; break;
-        default: s = [blockDetailSprite(def.style === 'fake' ? 'neon' : def.style, q)];
+        default: s = [coinSprite(q)];
       }
       this.memo.set(def.id, s);
     }
@@ -209,14 +209,53 @@ export class Renderer {
     this.blockPath(list, from, to, false);
     ctx.fillStyle = this.fillColor;
     ctx.fill();
+    this.blockDetail(list, from, to);
+    this.blockPath(list, from, to, true);
+    this.strokeLayers(GLOW_LAYERS[this.opt.glow], this.objColor, alpha * (0.85 + pulse * 0.25));
+  }
+
+  /**
+   * Bevel sheen and inner pattern of every block, batched into one fill and one stroke per
+   * style (a drawImage per block is far slower on software rasterisers).
+   */
+  blockDetail(list, from, to) {
+    const ctx = this.ctx, cx = this.cx, cy = this.cy;
+    ctx.beginPath();
     for (let i = from; i < to; i++) {
       const o = list[i];
       if (o.def.style === 'slab') continue;
-      const img = this.objSprite(o.def)[0].canvas;
-      ctx.drawImage(img, o.minX - this.cx, o.minY - this.cy, o.maxX - o.minX, o.maxY - o.minY);
+      ctx.rect(o.minX - cx, o.maxY - cy - (o.maxY - o.minY) * 0.45, o.maxX - o.minX, (o.maxY - o.minY) * 0.45);
     }
-    this.blockPath(list, from, to, true);
-    this.strokeLayers(GLOW_LAYERS[this.opt.glow], this.objColor, alpha * (0.85 + pulse * 0.25));
+    ctx.fillStyle = 'rgba(255,255,255,0.045)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+    ctx.lineWidth = BLOCK * 0.035;
+    for (const style of BLOCK_STYLES) {
+      let any = false;
+      ctx.beginPath();
+      for (let i = from; i < to; i++) {
+        const o = list[i];
+        const st = o.def.style === 'panel' || o.def.style === 'brick' ? o.def.style : 'neon';
+        if (st !== style) continue;
+        any = true;
+        const x = (o.minX + o.maxX) / 2 - cx, y = (o.minY + o.maxY) / 2 - cy;
+        const w = o.maxX - o.minX, h = o.maxY - o.minY;
+        if (style === 'panel') {
+          const a = w * 0.36, b = h * 0.36;
+          ctx.rect(x - a, y - b, 2 * a, 2 * b);
+          ctx.moveTo(x, y - b); ctx.lineTo(x, y + b); ctx.moveTo(x - a, y); ctx.lineTo(x + a, y);
+        } else if (style === 'brick') {
+          const top = o.maxY - cy, bot = o.minY - cy;
+          ctx.moveTo(x - w / 2, y); ctx.lineTo(x + w / 2, y);
+          ctx.moveTo(x, y); ctx.lineTo(x, bot);
+          ctx.moveTo(x - w / 4, y); ctx.lineTo(x - w / 4, top); ctx.moveTo(x + w / 4, y); ctx.lineTo(x + w / 4, top);
+        } else {
+          const a = w * 0.32, b = Math.min(h, w) * 0.32;
+          ctx.rect(x - a, y - b, 2 * a, 2 * b);
+        }
+      }
+      if (any) ctx.stroke();
+    }
   }
 
   drawSolids(pulse) {
@@ -235,6 +274,12 @@ export class Renderer {
       ctx.moveTo(o.hx0 - cx, o.hy0 - cy); ctx.lineTo(o.hx1 - cx, o.hy1 - cy); ctx.lineTo(o.rx - cx, o.ry - cy); ctx.closePath();
       ctx.fillStyle = this.fillColor;
       ctx.fill();
+      // Outline the hypotenuse and only the legs nothing solid covers.
+      const m = o.legMask | 0;
+      ctx.beginPath();
+      ctx.moveTo(o.hx0 - cx, o.hy0 - cy); ctx.lineTo(o.hx1 - cx, o.hy1 - cy);
+      if (!(m & 2)) ctx.lineTo(o.rx - cx, o.ry - cy); else ctx.moveTo(o.rx - cx, o.ry - cy);
+      if (!(m & 1)) ctx.lineTo(o.hx0 - cx, o.hy0 - cy);
       this.strokeLayers(GLOW_LAYERS[this.opt.glow], this.objColor, o.alpha);
     }
     ctx.globalAlpha = 1;

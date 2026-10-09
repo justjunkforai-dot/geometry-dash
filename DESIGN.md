@@ -12,12 +12,12 @@ shell** (rendering, audio, DOM UI, input).
             │  ├─ game.js     play session: ticks sim, practice,  │
             │  │              death/restart, music sync, HUD      │
             │  ├─ editor*.js  level editor                        │
-            │  └─ ui*.js      DOM menus / screens                 │
+            │  └─ ui.js, screens/  DOM menus and screens         │
             │ renderer.js · background.js · icons.js · particles  │
-            │ audio.js · music.js (tracks)  · storage.js          │
+            │ audio.js · synth.js · tracks.js · storage.js        │
             └──────────────────────────────────────────────────────┘
             ┌──────────── simulation core (DOM-free) ─────────────┐
-            │ sim.js      world + players + triggers, step(input) │
+            │ sim.js      world, players, triggers; camera.js     │
             │ player.js   per-mode physics, interactions          │
             │ physics.js  collision resolution (solids/slopes/…)  │
             │ collision.js geometric primitives (SAT, circle)     │
@@ -69,7 +69,9 @@ hit. Hazards are tested after movement: spikes via SAT (triangle vs AABB), saws 
 small dynamic list that is scanned directly.
 
 Ship/UFO/wave/swing use a 10-block corridor and ball/spider an 8-block one, centred on the portal and
-snapped to the grid (never below the ground). Cube and robot have the ground and no ceiling.
+snapped to the grid (never below the ground). A portal may pin the corridor floor explicitly
+(`props.floor`, the editor's "Flight band"); the level builder's `gate()` does this whenever the
+gated span equals the band height, so a corridor always matches the tunnel built after it. Cube and robot have the ground and no ceiling.
 Wave dies on any block, slope or hazard but can slide on the corridor floor/ceiling.
 
 Shallow slopes are **2:1 (≈26.6°)** instead of 22.5° so both ends land on grid points.
@@ -105,20 +107,38 @@ music is re-seeked to the sim.
 
 ## Rendering
 
-Canvas 2D with one world transform (camera-relative coordinates, y up). Blocks use a cached,
-colour-independent interior sprite plus **vector edge strokes on exposed sides only** (neighbour
-mask computed at load), drawn in 1–3 layered strokes for glow — colour triggers therefore cost
-nothing. Fixed-colour things (saws, orbs, pads, portals, player icons) are cached sprites with baked
-`shadowBlur`. Particles use a struct-of-arrays pool (2000 cap, no per-frame allocation).
+Canvas 2D with one world transform (camera-relative coordinates, y up). Blocks are drawn in a few
+batched passes per frame: one fill path, one sheen fill, one stroke path per block style for the
+inner pattern, and **vector edge strokes on exposed sides only** in 1–4 layered glow strokes.
+Exposure is computed at load from unit grid segments, so faces shared by two blocks, or by a block
+and a slope leg, are never outlined; colour triggers therefore cost nothing. Fixed-colour things
+(saws, orbs, pads, portals, player icons) are cached sprites with baked `shadowBlur`. Particles use
+a struct-of-arrays pool (2000 cap, no per-frame allocation). Software rasterisers (headless
+Chromium) are fill-rate bound at 1080p; the JS cost of update + render stays under 1 ms per frame.
 
 ## Editor
 
-`editor.js` (state, tools, undo) + `editor-ui.js` (DOM panels) + `editor-view.js` (canvas
-drawing). Objects are kept in the same compact format the game loads. Undo/redo stores
-diffs (`{removed, added}` object lists) so 100+ steps stay cheap. Playtest builds a level from the
-editor list and starts the game with a start state computed by scanning portals left of the start
-x. Autosave every 30 s into a recovery slot; on next open a recovery prompt appears if it is newer
-than the last manual save.
+`editor.js` (state, tools, input, undo) + `editor-ui.js` (DOM panels and dialogs) +
+`editor-view.js` (canvas overlays, palette thumbnails) + `editor-io.js` (item ↔ level conversion,
+JSON import/export with friendly errors, validation, playtest start state). Items carry stable
+uids; undo/redo stores diffs (`{removed, added}`), 200 steps. Playtest from the cursor replays every
+portal left of the cursor with the real portal code and derives the level time from the speed
+segments, so music and moving objects line up. A death or quitting a playtest returns to the editor
+at the same view. Autosave every 30 s into a recovery slot; opening the editor offers recovery.
+Custom levels track best % but award no stars or orbs.
+
+## Level validation tools
+
+- `tools/solve.mjs` — beam search over press/release decisions (6-tick steps, behaviour-bucketed
+  beam) that finds a completing input for a level, optionally collecting every coin, with presses
+  restricted to the music's eighth-note grid (±8 ticks). Results are minimised and written to
+  `tests/recordings/`, which the test suite replays (bot completion, portal coverage).
+- `--fair` reports each timed press's *recoverable window*: how far it can move earlier/later while
+  some later input still survives the next 1.25 s. Minimums: L1 71 ms (triple spike), L2 167,
+  L3 88, L4 100, L5 167, L6 167, L7 125, L8 42 (an artefact of the bot's double tap in the
+  Insane swing section; the triples are 71), L9 121.
+- `js/lint.js` flags floating spikes; tests also check that no mode/size/speed portal can be
+  skipped and that flying corridors leave no space around their tunnels.
 
 ## Decisions on open points
 
@@ -128,3 +148,7 @@ than the last manual save.
   and their collision box follows (90° steps swap width/height).
 - Hidden 9th level unlocks when all 24 coins of levels 1–8 are collected.
 - Unlocks use thresholds (stars, orbs, diamonds, coins, achievements) — nothing is purchased.
+- Green orb = gravity flip that pushes toward the new floor (a dip over pits killed players).
+- Playtest deaths return to the editor (practice-mode playtests keep retrying from checkpoints).
+- Wave Runner runs at 156 BPM so one beat is exactly four blocks at 1× and zig-zags turn on beats.
+- Toasts never capture clicks; Esc inside a text field still closes the open dialog.

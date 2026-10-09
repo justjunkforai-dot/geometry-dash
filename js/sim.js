@@ -1,10 +1,9 @@
 /**
- * Deterministic game simulation: world + players + triggers + camera. DOM-free.
+ * Deterministic game simulation: world + players + triggers + camera (camera.js). DOM-free.
  * step(input) advances exactly one fixed tick; identical inputs give identical states.
  */
-import {
-  BASE_SPEED, SPEEDS, DT, BLOCK, CAMERA, CAMERA_SCALE, VIEW_W, VIEW_H, PLAYER_SCREEN_X, START_X,
-} from './config.js';
+import { BASE_SPEED, SPEEDS, DT, BLOCK, START_X } from './config.js';
+import { createCamera, initCamera, updateCamera } from './camera.js';
 import { World } from './level.js';
 import { CHANNELS } from './objects.js';
 import {
@@ -28,7 +27,7 @@ export class Sim {
       this.outColors[ch] = [0, 0, 0];
       this.pulse[ch] = [0, 0, 0, 0];
     }
-    this.camera = { x: 0, y: 0, zoom: 1, px: 0, py: 0, pzoom: 1, ty: 0, look: 0 };
+    this.camera = createCamera();
     this.start = opts.start || null;
     this.reset();
   }
@@ -75,7 +74,7 @@ export class Sim {
     if (this.start) this.applyStart(this.start);
     if (p.grav < 0 && !this.corridor) p.y = 6 * BLOCK;
     updateTweens(this);
-    this.initCamera();
+    initCamera(this);
   }
 
   /** Starts mid-level: fires earlier triggers instantly and applies a scanned portal state. */
@@ -192,52 +191,11 @@ export class Sim {
     const p = this.players[0];
     const trig = this.world.triggers;
     while (this.trigIdx < trig.length && trig[this.trigIdx].x <= p.x) fireTrigger(this, trig[this.trigIdx++]);
-    this.updateCamera();
+    updateCamera(this);
     if (p.x + p.w * 0.5 >= this.world.endX) {
       this.completed = true;
       this.emit('complete', p.x, p.y, 0, 0);
     }
-  }
-
-  viewW() { return VIEW_W / (CAMERA_SCALE * this.camera.zoom); }
-  viewH() { return VIEW_H / (CAMERA_SCALE * this.camera.zoom); }
-
-  cameraTargetY() {
-    const c = this.camera;
-    const vh = this.viewH();
-    const cor = this.corridor;
-    if (cor) {
-      const ch = cor.ceil - cor.floor;
-      const mid = (cor.floor + cor.ceil) * 0.5;
-      if (ch <= vh - 16) return mid;
-      const py = this.players[0].y;
-      return Math.min(Math.max(py, cor.floor + vh * 0.5 - 20), cor.ceil - vh * 0.5 + 20);
-    }
-    let py = this.players[0].y;
-    if (this.dual) py = (py + this.players[1].y) * 0.5;
-    if (py > c.ty + CAMERA.deadUp) c.ty = py - CAMERA.deadUp;
-    else if (py < c.ty - CAMERA.deadDown) c.ty = py + CAMERA.deadDown;
-    return Math.max(-CAMERA.groundMargin + vh * 0.5, c.ty);
-  }
-
-  initCamera() {
-    const c = this.camera;
-    const p = this.players[0];
-    c.look = CAMERA.lookahead * this.speedIdx;
-    c.ty = p.y;
-    c.x = p.x + this.viewW() * (0.5 - PLAYER_SCREEN_X) + c.look;
-    c.y = this.cameraTargetY();
-    c.px = c.x; c.py = c.y; c.pzoom = c.zoom;
-  }
-
-  updateCamera() {
-    const c = this.camera;
-    const p = this.players[0];
-    c.px = c.x; c.py = c.y; c.pzoom = c.zoom;
-    c.look += (CAMERA.lookahead * this.speedIdx - c.look) * (1 - Math.exp(-2 * DT));
-    c.x = p.x + this.viewW() * (0.5 - PLAYER_SCREEN_X) + c.look;
-    const rate = this.corridor ? CAMERA.corridorRate : CAMERA.followRate;
-    c.y += (this.cameraTargetY() - c.y) * (1 - Math.exp(-rate * DT));
   }
 
   snapshot() {

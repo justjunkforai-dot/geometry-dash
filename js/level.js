@@ -48,10 +48,10 @@ function trig(deg) {
  * Local (blocks, relative to centre) → world units. Rotation is clockwise in degrees,
  * applied after flips. Writes into out[i], out[i+1].
  */
-function xf(o, lx, ly, out, i) {
+function xf(o, lx, ly, out, i, rot = o.rot) {
   if (o.fx) lx = -lx;
   if (o.fy) ly = -ly;
-  const [s, c] = trig(o.rot);
+  const [s, c] = trig(rot);
   const sc = o.scale * BLOCK;
   out[i] = o.x + (lx * c + ly * s) * sc;
   out[i + 1] = o.y + (-lx * s + ly * c) * sc;
@@ -67,8 +67,10 @@ export function updateGeometry(o) {
   o.vx0 = o.x - half; o.vx1 = o.x + half; o.vy0 = o.y - half; o.vy1 = o.y + half;
   switch (o.kind) {
     case 'solid': {
+      // Solids stay axis-aligned boxes: their footprint uses the rotation snapped to 90°.
       const b = d.solid;
-      xf(o, b[0], b[1], tmp, 0); xf(o, b[2], b[3], tmp, 2);
+      const r90 = Math.round(o.rot / 90) * 90;
+      xf(o, b[0], b[1], tmp, 0, r90); xf(o, b[2], b[3], tmp, 2, r90);
       setBox(o, tmp[0], tmp[1], tmp[2], tmp[3]);
       break;
     }
@@ -221,22 +223,53 @@ export class World {
     });
   }
 
-  /** Exposed-edge bitmask for full blocks: 1 top, 2 right, 4 bottom, 8 left neighbour present. */
+  /**
+   * Which outline edges to hide because something solid covers them. Full blocks get `mask`
+   * (1 top, 2 right, 4 bottom, 8 left covered); slopes get `legMask` (1 the leg from the
+   * hypotenuse start to the right angle, 2 the other leg). Edges are compared as unit grid
+   * segments, so a slope resting on a block hides both the block's top and the slope's base.
+   */
   computeMasks() {
-    const cells = new Map();
-    const key = (cx, cy, g) => `${cx},${cy},${g}`;
+    const cells = new Set();
+    const slopeFaces = new Map();
+    const near = (v) => Math.abs(v - Math.round(v)) < 0.01;
+    // Unit segments of an axis-aligned edge: "h x,y" runs (x,y)→(x+1,y), "v x,y" runs (x,y)→(x,y+1).
+    const segs = (x0, y0, x1, y1, g) => {
+      const a = [x0 / BLOCK, y0 / BLOCK, x1 / BLOCK, y1 / BLOCK];
+      if (!a.every(near)) return null;
+      const [bx0, by0, bx1, by1] = a.map(Math.round);
+      const out = [];
+      if (by0 === by1) for (let x = Math.min(bx0, bx1); x < Math.max(bx0, bx1); x++) out.push(['h', x, by0, g]);
+      else if (bx0 === bx1) for (let y = Math.min(by0, by1); y < Math.max(by0, by1); y++) out.push(['v', bx0, y, g]);
+      else return null;
+      return out;
+    };
+    const segKey = (sg) => sg.join(',');
+    const cellKey = (x, y, g) => `${x},${y},${g}`;
     const full = (o) => o.kind === 'solid' && (o.def.style === 'neon' || o.def.style === 'panel' || o.def.style === 'brick')
       && Math.abs(o.maxX - o.minX - BLOCK) < 0.01 && Math.abs(o.maxY - o.minY - BLOCK) < 0.01;
+    const legs = (o) => [segs(o.hx0, o.hy0, o.rx, o.ry, o.group), segs(o.hx1, o.hy1, o.rx, o.ry, o.group)];
+    /** A unit segment lies on the face of some full block. */
+    const onBlock = ([d, x, y, g]) => (d === 'h' ? cells.has(cellKey(x, y, g)) || cells.has(cellKey(x, y - 1, g))
+      : cells.has(cellKey(x, y, g)) || cells.has(cellKey(x - 1, y, g)));
     for (const o of this.objects) {
-      if (!full(o)) continue;
-      cells.set(key(Math.round(o.minX / BLOCK), Math.round(o.minY / BLOCK), o.group), true);
+      if (full(o)) cells.add(cellKey(Math.round(o.minX / BLOCK), Math.round(o.minY / BLOCK), o.group));
+      if (o.kind === 'slope') for (const f of legs(o)) if (f) for (const sg of f) slopeFaces.set(segKey(sg), (slopeFaces.get(segKey(sg)) || 0) + 1);
     }
     for (const o of this.objects) {
-      if (!full(o)) { o.mask = 0; continue; }
-      const cx = Math.round(o.minX / BLOCK);
-      const cy = Math.round(o.minY / BLOCK);
-      o.mask = (cells.has(key(cx, cy + 1, o.group)) ? 1 : 0) | (cells.has(key(cx + 1, cy, o.group)) ? 2 : 0)
-        | (cells.has(key(cx, cy - 1, o.group)) ? 4 : 0) | (cells.has(key(cx - 1, cy, o.group)) ? 8 : 0);
+      if (full(o)) {
+        const cx = Math.round(o.minX / BLOCK), cy = Math.round(o.minY / BLOCK), g = o.group;
+        const side = (dx, dy, sg) => cells.has(cellKey(cx + dx, cy + dy, g)) || slopeFaces.has(segKey(sg));
+        o.mask = (side(0, 1, ['h', cx, cy + 1, g]) ? 1 : 0) | (side(1, 0, ['v', cx + 1, cy, g]) ? 2 : 0)
+          | (side(0, -1, ['h', cx, cy, g]) ? 4 : 0) | (side(-1, 0, ['v', cx, cy, g]) ? 8 : 0);
+      } else if (o.kind === 'slope') {
+        o.legMask = 0;
+        legs(o).forEach((f, i) => {
+          if (!f) return;
+          const ground = o.group === 0 && f.every(([d, , y]) => d === 'h' && y === 0);
+          if (ground || f.every((sg) => onBlock(sg) || slopeFaces.get(segKey(sg)) > 1)) o.legMask |= 1 << i;
+        });
+      } else o.mask = 0;
     }
   }
 
